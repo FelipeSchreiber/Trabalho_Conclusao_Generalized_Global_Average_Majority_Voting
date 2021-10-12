@@ -1,0 +1,1 @@
+# Trabalho_Conclusao_Generalized_Global_Average_Majority_Voting
