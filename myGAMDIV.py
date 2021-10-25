@@ -14,7 +14,7 @@ def belonging1(f_bar,neighborhood_avg,prev_labels,cte):
 	new_labels = np.where(neighborhood_avg > f_bar,neighborhood_avg - f_bar[np.newaxis,:],0.0)
 	new_labels *= diff[np.newaxis,:]
 	row_sums = new_labels.sum(axis=1)
-	new_labels /= row_sums[:, np.newaxis]
+	new_labels /= (row_sums[:, np.newaxis] + cte)
 	return new_labels
 	
 def belonging2(f_bar,neighborhood_avg,prev_labels,cte):
@@ -22,7 +22,7 @@ def belonging2(f_bar,neighborhood_avg,prev_labels,cte):
 	new_labels = np.where(neighborhood_avg > f_bar,neighborhood_avg,0.0)
 	new_labels *= diff[np.newaxis,:]
 	row_sums = new_labels.sum(axis=1)
-	new_labels /= row_sums[:, np.newaxis]
+	new_labels /= (row_sums[:, np.newaxis] + cte)
 	return new_labels
 	
 def belonging3(f_bar,neighborhood_avg,prev_labels,cte):
@@ -35,15 +35,35 @@ def belonging4(f_bar,neighborhood_avg,prev_labels,cte):
 	new_labels = np.where(neighborhood_avg > f_bar,neighborhood_avg - f_bar[np.newaxis,:],0.0)
 	new_labels /= (f_bar + cte)
 	row_sums = new_labels.sum(axis=1)
-	new_labels /= row_sums[:, np.newaxis]
+	new_labels /= (row_sums[:, np.newaxis] + cte)
 	return new_labels
 	
 def belonging5(f_bar,neighborhood_avg,prev_labels,cte):
 	new_labels = np.where(neighborhood_avg > f_bar,neighborhood_avg,0.0)
 	new_labels /= (f_bar + cte)
 	row_sums = new_labels.sum(axis=1)
-	new_labels /= row_sums[:, np.newaxis]
+	new_labels /= (row_sums[:, np.newaxis]+cte)
 	return new_labels
+	
+def belonging6(f_bar, neighborhood_avg,prev_labels,cte):
+    new_labels = np.where(neighborhood_avg > f_bar, neighborhood_avg, 0.0)
+    for node in range(new_labels.shape[0]):
+        if np.sum(new_labels[node, :]) == 0:
+            col = np.argmax(new_labels[node, :] - f_bar, axis=1)
+            new_labels[node, col] = 1
+        new_labels[node, :] = new_labels[node, :] \
+            / np.sum(new_labels[node, :])
+    return new_labels
+    
+def belonging7(f_bar, neighborhood_avg,prev_labels,cte):
+    new_labels = np.where(neighborhood_avg > f_bar, neighborhood_avg - f_bar, 0)
+    for node in range(new_labels.shape[0]):
+        if np.sum(new_labels[node, :]) == 0:
+            col = np.argmax(new_labels[node, :] - f_bar, axis=1)
+            new_labels[node, col] = 1
+        new_labels[node, :] = new_labels[node, :] \
+            / np.sum(new_labels[node, :])
+    return new_labels
 
 def check_convergence(prev,new,epsilon,niter,maxiter):
     vec = np.linalg.norm(prev-new,axis=1)
@@ -53,7 +73,7 @@ def check_convergence(prev,new,epsilon,niter,maxiter):
 
 total_cpu = mp.cpu_count()
 pool = mp.Pool(total_cpu)
-def myGAM(G,k,epsilon=0.001,consider_PR=False,maxiter=100,mode=1,retry=False):
+def myGAM(G,k,epsilon=0.001,maxiter=100,mode=1,retry=False):
 	total_rounds = 0
 	V = G.number_of_nodes()
 	cte = 1/(2*V)
@@ -68,6 +88,8 @@ def myGAM(G,k,epsilon=0.001,consider_PR=False,maxiter=100,mode=1,retry=False):
 	degrees = [degrees_dict[key] for key in degrees_dict.keys()]
 	D_inv = np.linalg.inv(np.diag(degrees))
 	A = nx.linalg.graphmatrix.adjacency_matrix(G).toarray()
+	A = A.astype(np.float16)
+	A += np.eye(V)
     #A = np.where(A > 0, 1, 0) #dont consider weights
 	prev_labels = labels
 	not_convergence = True
@@ -85,11 +107,15 @@ def myGAM(G,k,epsilon=0.001,consider_PR=False,maxiter=100,mode=1,retry=False):
 		func = belonging4
 	if mode == 5:
 		func = belonging5
-
+	if mode == 6:
+		func = belonging6
+	if mode == 7:
+		func = belonging7
+			
+	D_inv_A = np.matmul(D_inv,A)	
 	for step in range(0,2):
 		while not_convergence:
-				f = np.matmul(D_inv,A)
-				f = f.dot(labels)
+				f = D_inv_A.dot(labels)
 				f_split = np.array_split(f, total_cpu)
 				prev_labels_split = np.array_split(f,total_cpu)
 				labels = np.vstack([pool.apply(func, args=(f_bar,row,prev_labels_row,cte)) for row,prev_labels_row in zip(f_split,prev_labels_split)])
@@ -97,30 +123,22 @@ def myGAM(G,k,epsilon=0.001,consider_PR=False,maxiter=100,mode=1,retry=False):
 				prev_labels = labels
 				f_bar = f.mean(axis=0)
 				total_rounds += 1
+				#print(f"Shape: {np.unique(np.argmax(labels, axis=1))}")
 				if total_rounds % 100 == 0:
 					print(f"Took {total_rounds} rounds\n")
 		print(f"Took {total_rounds} rounds\n")
-		"""if step == 0 and retry == True:
-					labels_unique = np.unique(np.argmax(labels, axis=1))
-					labels = np.take(labels,labels_unique,axis=1)
-					row_sums = labels.sum(axis=1)
-					labels /= (row_sums[:, np.newaxis])
-					
-					not_convergence = True
-					prev_labels = labels
-					f_bar = labels.mean(axis=0)"""
 		if step == 0 and retry == True:
-					labels_unique = np.unique(np.argmax(labels, axis=1), return_inverse=True)
-					n_labels = len(np.unique(labels_unique[0]))
-					labels = np.zeros((V,n_labels))
-					labels[np.arange(V),labels_unique[1]] = 1
-					
-					not_convergence = True
-					prev_labels = labels
-					f_bar = labels.mean(axis=0)
+			labels_max = np.unique(np.argmax(labels, axis=1), return_inverse=True)
+			n_labels = labels_max[0].shape[0]
+			labels = np.zeros((V,n_labels))
+			labels[np.arange(V),labels_max[1]] = 1
+			not_convergence = True
+			prev_labels = labels
+			f_bar = labels.mean(axis=0)
 		else:
 			break
-	labels = np.where(labels > 0.01,labels,0.0)
+	labels_max = np.unique(np.argmax(labels, axis=1), return_inverse=True)
+	labels = labels[:,labels_max[0]]
 	row_sums = labels.sum(axis=1)
 	labels /= (row_sums[:, np.newaxis] + cte)
 	return labels
