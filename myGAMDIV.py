@@ -70,9 +70,14 @@ def check_convergence(prev,new,epsilon,niter,maxiter):
     if any(x > epsilon for x in vec) and niter < maxiter:
         return True #informa que o algoritmo deve continuar
     return False #terminou
+    
+def getTopK(a,k=3):
+    idx = np.argsort(a)[:,:-k]
+    for i,ind in enumerate(idx):
+        for j in ind:
+            a[i,j] = 0
+    return a
 
-total_cpu = mp.cpu_count()
-pool = mp.Pool(total_cpu)
 def myGAM(G,k,epsilon=0.001,maxiter=100,mode=1,retry=False):
 	total_rounds = 0
 	V = G.number_of_nodes()
@@ -90,6 +95,8 @@ def myGAM(G,k,epsilon=0.001,maxiter=100,mode=1,retry=False):
 	A = nx.linalg.graphmatrix.adjacency_matrix(G).toarray()
 	A = A.astype(np.float16)
 	A += np.eye(V)
+	total_cpu = mp.cpu_count()
+	pool = mp.Pool(total_cpu)
     #A = np.where(A > 0, 1, 0) #dont consider weights
 	prev_labels = labels
 	not_convergence = True
@@ -128,15 +135,22 @@ def myGAM(G,k,epsilon=0.001,maxiter=100,mode=1,retry=False):
 					print(f"Took {total_rounds} rounds\n")
 		print(f"Took {total_rounds} rounds\n")
 		if step == 0 and retry == True:
+			argmax = np.argsort(labels)[:,-2:]
+			unique = np.unique(argmax)
+			labels = labels[:,unique]
+			labels = getTopK(labels,2)
+			row_sums = labels.sum(axis=1)
+			labels /= (row_sums[:, np.newaxis] + cte)
+		else:
+			break
+		"""if step == 0 and retry == True:
 			labels_max = np.unique(np.argmax(labels, axis=1), return_inverse=True)
 			n_labels = labels_max[0].shape[0]
 			labels = np.zeros((V,n_labels))
 			labels[np.arange(V),labels_max[1]] = 1
 			not_convergence = True
 			prev_labels = labels
-			f_bar = labels.mean(axis=0)
-		else:
-			break
+			f_bar = labels.mean(axis=0)"""
 	labels_max = np.unique(np.argmax(labels, axis=1), return_inverse=True)
 	labels = labels[:,labels_max[0]]
 	row_sums = labels.sum(axis=1)

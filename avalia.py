@@ -67,12 +67,15 @@ def getBelongings(G):
     return node_belonging
     
 #Funcao que dada a matriz de probabilidades e o grau de pertencimento real, faz o scatter plot
-def makeStructuralPlot(pred,node_belongings,filename):
-	structure_found = np.max(pred,axis=1)
-	plt.figure(figsize=(8,8))
-	plt.scatter(node_belongings,structure_found)
+def makeStructuralPlot(preds,node_belongings,filename):
+	for pred,node_belonging in zip(preds,node_belongings):
+		structure_found = np.max(pred,axis=1)
+		plt.figure(figsize=(8,8))
+		plt.scatter(node_belonging,structure_found)
 	plt.xlabel("Pertencimento real")
 	plt.ylabel("Pertencimento retornado pelo algoritmo")
+	plt.ylim(0,1)
+	plt.xlim(0,1)
 	plt.savefig(filename)
 	plt.clf()
 
@@ -132,41 +135,48 @@ def generateNGraphs(N,k,pin,pout):
 		belongings.append(belonging)
 	return graphs, truths, np.hstack(belongings)
     
-def makeTest(k,graphs,truths,belongings,mode,retry):
+def makeTest(k,graphs,truths,belongings,mode,retry,pout):
 	results = []
 	acuracias = []
 	max_dim = 0
 	count = 0
 	for i,G in enumerate(graphs):
 		l = myGAM(G,k,0.001,maxiter=30,mode=mode,retry=retry)
-		results.append(l)
-		acuracias.append(acc(results[-1],truths[i]))
+		#results.append(l)
+		acuracias.append(acc(l,truths[i]))
 		labels_max = np.argmax(l,axis=1)
 		values, counts = np.unique(labels_max, return_counts=True)
-		#print(values,counts,acuracias[-1])
 		if len(values) == 1:
 			count += 1
-		if l.shape[1] > max_dim:
-			max_dim = l.shape[1]
-	for i,arr in enumerate(results):
-		if arr.shape[1] < max_dim:
-			diff = max_dim - arr.shape[1]
-			results[i] = np.hstack([arr,np.zeros((len(graphs[0]),diff))])
-	results = np.vstack(results)
-	return np.mean(acuracias), np.std(acuracias), results, count
+	#if retry:
+	#	makeStructuralPlot(results,belongings,f"Retry_Belongings_com_{k}_labels_mode_{mode}_pout_{pout}.png")
+	#else:
+	#	makeStructuralPlot(results,belongings,f"Belongings_com_{k}_labels_mode_{mode}_pout_{pout}.png")
+		#print(values,counts,acuracias[-1])
+        #if len(values) == 1:
+        #    count += 1
+        #if l.shape[1] > max_dim:
+        #    max_dim = l.shape[1]
+        #print("mode = ",mode," shape: ",l.shape)
+        #for i,arr in enumerate(results):
+        #    if arr.shape[1] < max_dim:
+        #        diff = max_dim - arr.shape[1]
+        #        results[i] = np.hstack([arr,np.zeros((len(graphs[0]),diff))])
+    #results = np.vstack(results)
+	return np.mean(acuracias), np.std(acuracias), count
 
-def makeTestChangingP(pin,pout_min,pout_max,N,k,k_init,retry):
+def makeTestChangingP(pin,pout_min,pout_max,N,k,k_init,retry,modes):
 	pouts = np.arange(pout_min,pout_max,0.01)
 	data = []
-	for pout in pouts:
+	for i,pout in enumerate(pouts):
 		graphs, truths, belongings = generateNGraphs(N,k,pin,pout)
-		for mode in range(0,6):
-			y, err, results, times_failed = makeTest(k_init,graphs,truths,belongings,mode,retry)
-			if retry:
-				makeStructuralPlot(results,belongings,f"Retry_Belongings_com_{k}_labels_mode_{mode}_pin_{pin}_pout_{pout}.png")
-			else:
-				makeStructuralPlot(results,belongings,f"Belongings_com_{k}_labels_mode_{mode}_pin_{pin}_pout_{pout}.png")
+		for mode in modes:
+			y, err, times_failed = makeTest(k_init,graphs,truths,belongings,mode,retry,pout)
+      	  #if retry:
+          #	makeStructuralPlot(results,belongings,f"Retry_Belongings_com_{k}_labels_mode_{mode}_pin_{pin}_pout_{pout}.png")
+          #else:
+          #  makeStructuralPlot(results,belongings,f"Belongings_com_{k}_labels_mode_{mode}_pin_{pin}_pout_{pout}.png")
 			data.append({'mode':mode,'acc':y,'std':err,'k':k,'retry':retry,'pout':pout,'failed':times_failed})
-	return data
-	
+		print(i/len(pouts),pout)
+	return data	
 

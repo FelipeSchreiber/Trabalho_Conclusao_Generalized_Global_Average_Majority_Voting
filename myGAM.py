@@ -9,13 +9,14 @@ import numpy as np
 
 
 def belonging(f_bar, neighborhood_avg):
-    new_labels = np.where(neighborhood_avg > f_bar, neighborhood_avg, 0)
+    """new_labels = np.where(neighborhood_avg > f_bar, neighborhood_avg, 0)
     for node in range(new_labels.shape[0]):
         if np.sum(new_labels[node, :]) == 0:
             col = np.argmax(new_labels[node, :] - f_bar, axis=1)
             new_labels[node, col] = 1
         new_labels[node, :] = new_labels[node, :] \
-            / np.sum(new_labels[node, :])
+            / np.sum(new_labels[node, :])"""
+    new_labels = np.argmax(neighborhood_avg - f_bar, axis=1)
     return new_labels
 
 
