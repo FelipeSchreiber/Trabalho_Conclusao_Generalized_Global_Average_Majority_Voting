@@ -52,7 +52,7 @@ object SimpleGraphApp {
 	val initialMessage = new Array[Double](V)
 	initialMessage.map{_ => 0}
 	var g = new Array[Double](V)
-	g.map{_ => 1/V}
+	g.map{_ => 1/(2*V)}
 
 	def sendMsg(e: EdgeTriplet[Array[Double],Int]): Iterator[(VertexId,Array[Double])] =
 		Iterator((e.srcId, e.dstAttr), 
@@ -88,7 +88,7 @@ object SimpleGraphApp {
 		lpaGraph.cache() 
 		i += step
 		g.map{_ => 0}
-		lpaGraph.vertices.take(3).foreach(a => g.zip(a._2).map{case(x,y) => x + y})
+		lpaGraph.vertices.foreach(a => g.zip(a._2).map{case(x,y) => x + y})
 		var total = g.sum
 		g.map{t => 1/total}
 	}
