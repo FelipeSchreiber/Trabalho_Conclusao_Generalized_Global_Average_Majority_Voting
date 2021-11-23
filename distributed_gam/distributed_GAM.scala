@@ -41,6 +41,7 @@ object SimpleGraphApp {
 	val g = sc.doubleAccumulator("my accum")
 	lpaGraph.vertices.foreach{a => g.add(a._2.toDouble/V)}
 	println("Initial G value: "+g.value.toString)
+	var g_broadcast = sc.broadcast(g.value)
 	
 	def sendMsg(e: EdgeTriplet[Label, Int]): Iterator[(VertexId,Map[Label, Long])] =
 		Iterator((e.srcId, Map(e.dstAttr -> 1L)), 
@@ -56,7 +57,7 @@ object SimpleGraphApp {
 			var localAvg:Double = message.getOrElse(1,0L).toDouble
 			localAvg /= (message.getOrElse(0,0L) + message.getOrElse(1,0L)).toDouble
 			//println("Local avg "+vid.toString+" "+localAvg.toString) 
-			if (localAvg > g.value)
+			if (localAvg > g_broadcast.value)
 				label = 1
 			else
 				label = 0 
@@ -83,6 +84,7 @@ object SimpleGraphApp {
 		println("G value: "+g.value.toString)
 		lpaGraph.vertices.foreach(a => g.add(a._2.toDouble/V))
 		println("G value: "+g.value.toString)
+		g_broadcast = sc.broadcast(g.value)
 		println(i)
 	}
 	val writer = new PrintWriter(new File("results.txt"))
